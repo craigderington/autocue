@@ -85,4 +85,12 @@ Failures retain screenshots and traces. Each profile also captures a default rea
 
 `.github/workflows/verify.yml` runs syntax/unit checks and the browser matrix on Ubuntu with Poppler and browser system dependencies installed. This is the reproducible path for the complete matrix when local browser dependencies are unavailable. The workflow runs after the changes are pushed to GitHub; adding the file does not run CI by itself.
 
+On Omarchy, Playwright's Ubuntu WebKit build can require library versions that differ from Arch's. Run the complete matrix in the supplied Ubuntu test container to keep those dependencies separate from your desktop:
+
+```sh
+make test-browser-docker
+```
+
+This requires Docker and downloads the matching Playwright image on the first build. It includes Python, Poppler, and the pinned Node development dependencies. The tests run as the container's non-root `pwuser` (UID 1000); the host report directories must be writable by that UID. Reports and screenshots are saved to `playwright-report/` and `test-results/`. The test server stays inside the container with no published ports. Keep the Dockerfile's Playwright version in sync with `package-lock.json` when upgrading.
+
 Browser execution requires loopback sockets and browser subprocesses. In a sandbox that blocks them, `make check`, `make test`, and test discovery remain available, but discovery alone does not verify browser behavior.

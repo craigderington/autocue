@@ -1,0 +1,16 @@
+# Only send the application and test inputs to the local build daemon.
+*
+!Dockerfile.browser-tests
+!package.json
+!package-lock.json
+!server.py
+!Makefile
+!playwright.config.js
+!public/
+!public/**
+!tests/
+!tests/**
+!e2e/
+!e2e/**
+**/__pycache__/
+**/*.pyc
