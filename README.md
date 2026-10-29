@@ -1,4 +1,4 @@
-# Omarchy Teleprompter
+# autocue
 
 A simple local teleprompter for reading scripts at your own pace. Import a file, adjust the reading speed, and press **Space**. The interface follows your active Omarchy theme automatically.
 
@@ -11,7 +11,7 @@ make run
 # or: python3 server.py
 ```
 
-Open **http://localhost:3400**. Keep the terminal running; press Ctrl+C to stop. To choose a different port: `python3 server.py --port 3500`.
+Open **<http://localhost:3400>**. Keep the terminal running; press Ctrl+C to stop. To choose a different port: `python3 server.py --port 3500`.
 
 ## Read a script
 
