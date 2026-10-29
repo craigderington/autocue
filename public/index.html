@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1a1b26">
+  <meta name="description" content="A simple local teleprompter that follows your Omarchy theme.">
+  <title>Omarchy Teleprompter</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" type="module"></script>
+</head>
+<body>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5h16v-5"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="m14 5 5 5M4 20l5-1L21 7l-4-4L5 15z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 4 12 8-12 8z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M5 4v16m14-1L7 12l12-7z"/></symbol>
+    <symbol id="i-mirror" viewBox="0 0 24 24"><path d="M12 3v18M8 6l-5 12h5zm8 0 5 12h-5z"/></symbol>
+    <symbol id="i-fullscreen" viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H5v18h14V8zm0 0v5h5M8 12h8m-8 4h6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+  </svg>
+  <div class="app" id="app">
+    <header class="header">
+      <a class="brand" href="/" aria-label="Omarchy Teleprompter home">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span>omarchy<span class="brand-divider">/</span><span class="brand-product">teleprompter</span></span>
+      </a>
+      <div class="header-actions">
+        <span class="theme-indicator" id="theme-indicator" title="Checking the local Omarchy theme"><span class="theme-dot"></span><span id="theme-name">Tokyo Night · fallback</span></span>
+        <button class="button quiet" id="edit"><svg><use href="#i-edit"/></svg><span>Edit script</span></button>
+        <button class="button import-button" id="import"><svg><use href="#i-upload"/></svg><span>Import script</span></button>
+        <input id="file-input" type="file" accept=".docx,.pdf,.txt,.md,.markdown,.doc" hidden aria-label="Import a script file">
+      </div>
+    </header>
+    <main>
+      <section class="document-bar" aria-label="Current script">
+        <div class="document-info"><div class="eyebrow">YOUR WORDS. YOUR PACE.</div><h1 id="script-title">The opening take</h1><div class="document-details"><svg><use href="#i-doc"/></svg><span id="word-count">0 words</span><span class="detail-dot">·</span><span id="duration">0 min read</span><span class="sample-label" id="sample-label">SAMPLE SCRIPT</span></div></div>
+        <div class="local-note"><span class="small-square"></span>Local files. Just you and your script.</div>
+      </section>
+      <section class="prompter" id="prompter" aria-label="Teleprompter">
+        <div class="stage-top"><span class="stage-label"><span id="status-dot"></span><span id="status" role="status">READY WHEN YOU ARE</span></span><span class="stage-meta">READING VIEW <span>01</span></span></div>
+        <div class="reading-window" id="reading-window" tabindex="0" aria-label="Script reading area. Space to play or pause; arrow keys to adjust speed."><article class="script" id="script"></article></div>
+        <div class="cue" aria-hidden="true"><span class="cue-arrow"></span><span class="cue-line"></span></div>
+        <div class="stage-bottom"><span id="stage-hint">Take a breath. Press play.</span><button class="icon-button" id="fullscreen" title="Fullscreen (F)" aria-label="Enter fullscreen"><svg><use href="#i-fullscreen"/></svg></button></div>
+        <div class="drop-overlay" id="drop-overlay"><svg><use href="#i-upload"/></svg><span>Drop your next script here</span><small>DOCX, PDF, TXT, or Markdown · up to 10 MB</small></div>
+      </section>
+      <section class="controls" aria-label="Playback controls">
+        <div class="transport"><button class="icon-button reset-button" id="reset" title="Restart (R)" aria-label="Restart script"><svg><use href="#i-reset"/></svg></button><button class="play-button" id="play"><svg id="play-icon"><use href="#i-play"/></svg><span id="play-label">Start reading</span><kbd>SPACE</kbd></button></div>
+        <div class="control-group speed-group"><div class="control-label"><label for="speed">SCROLL SPEED</label><span><output id="speed-value" for="speed">140</output><small> WPM</small></span></div><div class="slider-row"><span>Slow</span><input type="range" id="speed" min="40" max="300" step="5" value="140" aria-label="Scroll speed in words per minute"><span>Fast</span></div></div>
+        <div class="control-group size-group"><div class="control-label"><span>TEXT SIZE</span><output id="size-value">48 px</output></div><div class="size-buttons"><button id="smaller" aria-label="Decrease text size">A<span>−</span></button><div class="size-rule"></div><button id="larger" aria-label="Increase text size">A<span>+</span></button></div></div>
+        <div class="mirror-group"><button class="mirror-button" id="mirror" aria-pressed="false" title="Mirror script (M)"><svg><use href="#i-mirror"/></svg><span>Mirror</span><span class="switch" aria-hidden="true"></span></button></div>
+      </section>
+      <div class="progress-row"><time id="elapsed">00:00</time><input type="range" id="progress" min="0" max="1000" value="0" aria-label="Script position"><time id="remaining">−00:00</time></div>
+    </main>
+    <footer><span><span class="footer-dot"></span>Made for a clear delivery.</span><span class="keyboard-hints"><kbd>SPACE</kbd> play / pause <span>·</span> <kbd>↑</kbd><kbd>↓</kbd> speed <span>·</span> <kbd>F</kbd> fullscreen</span><button id="shortcuts">All shortcuts <span>↗</span></button></footer>
+  </div>
+  <dialog id="editor-dialog" aria-labelledby="editor-title"><form id="editor-form"><div class="dialog-heading"><div><div class="eyebrow">MAKE IT YOURS</div><h2 id="editor-title">Your script</h2></div><button class="icon-button" type="button" id="close-editor" aria-label="Close editor"><svg><use href="#i-close"/></svg></button></div><label for="title-input">Script title</label><input id="title-input" maxlength="120" required><label for="script-input">Script text <span>Paste or write your words below.</span></label><textarea id="script-input" required maxlength="200000" spellcheck="true"></textarea><div class="dialog-footer"><span>Edits start a fresh take.</span><button class="button import-button" type="submit">Use this script <span>→</span></button></div></form></dialog>
+  <dialog id="shortcuts-dialog" aria-labelledby="shortcuts-title"><div class="dialog-heading"><h2 id="shortcuts-title">Stay in your flow.</h2><button class="icon-button" id="close-shortcuts" aria-label="Close shortcuts"><svg><use href="#i-close"/></svg></button></div><dl class="shortcut-list"><div><dt>Play / pause</dt><dd><kbd>SPACE</kbd></dd></div><div><dt>Faster / slower</dt><dd><kbd>↑</kbd> <kbd>↓</kbd></dd></div><div><dt>Restart script</dt><dd><kbd>R</kbd></dd></div><div><dt>Mirror text</dt><dd><kbd>M</kbd></dd></div><div><dt>Fullscreen</dt><dd><kbd>F</kbd></dd></div><div><dt>Pause / leave fullscreen</dt><dd><kbd>ESC</kbd></dd></div></dl></dialog>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>
