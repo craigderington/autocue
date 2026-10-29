@@ -1,13 +1,12 @@
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
-import threading
+import subprocess
 import unittest
 from unittest.mock import patch
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
-from http.server import ThreadingHTTPServer
+from types import SimpleNamespace
 import zipfile
 
 import server
@@ -20,9 +19,9 @@ def docx(paragraphs):
     return buffer.getvalue()
 
 
-def pdf():
+def pdf(message="Hello from the PDF script."):
     # Minimal valid PDF fixture, with computed offsets and no generator dependency.
-    stream = b"BT /F1 18 Tf 72 720 Td (Hello from the PDF script.) Tj ET"
+    stream = f"BT /F1 18 Tf 72 720 Td ({message}) Tj ET".encode()
     objects = [b"<< /Type /Catalog /Pages 2 0 R >>",
                b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
                b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
@@ -61,6 +60,11 @@ class ExtractionTests(unittest.TestCase):
             with self.assertRaisesRegex(server.ImportErrorMessage, "Poppler"):
                 server.extract_script(pdf(), "script.pdf")
 
+    @unittest.skipUnless(server.shutil.which("pdftotext"), "Poppler is not installed")
+    def test_pdf_without_text_explains_ocr(self):
+        with self.assertRaisesRegex(server.ImportErrorMessage, "OCR"):
+            server.extract_script(pdf(""), "scan.pdf")
+
     def test_invalid_and_empty_inputs(self):
         for filename, data in [("empty.txt", b" \n "), ("bad.docx", b"not a zip"), ("bad.pdf", b"not a PDF"), ("old.doc", b"legacy"), ("script.exe", b"program"), ("binary.txt", b"a\0b"), ("bad.txt", b"\xff\xff")]:
             with self.subTest(filename=filename), self.assertRaises(server.ImportErrorMessage):
@@ -69,6 +73,41 @@ class ExtractionTests(unittest.TestCase):
     def test_character_limit(self):
         with self.assertRaisesRegex(server.ImportErrorMessage, "too long"):
             server.extract_script(b"a" * (server.MAX_TEXT + 1), "long.txt")
+
+    def test_pdf_timeout_removes_temporary_script(self):
+        locations = []
+
+        def timeout(command, **kwargs):
+            source = Path(command[-2])
+            self.assertTrue(source.exists())
+            locations.append(source.parent)
+            raise subprocess.TimeoutExpired(command, 15)
+
+        with patch("server.shutil.which", return_value="pdftotext"), patch("server.subprocess.run", side_effect=timeout):
+            with self.assertRaisesRegex(server.ImportErrorMessage, "too long"):
+                server.extract_script(pdf(), "slow.pdf")
+        self.assertTrue(locations)
+        self.assertFalse(locations[0].exists())
+
+    def test_pdf_conversion_error_removes_temporary_script(self):
+        locations = []
+
+        def fail(command, **kwargs):
+            locations.append(Path(command[-2]).parent)
+            return SimpleNamespace(returncode=1)
+
+        with patch("server.shutil.which", return_value="pdftotext"), patch("server.subprocess.run", side_effect=fail):
+            with self.assertRaisesRegex(server.ImportErrorMessage, "password protected"):
+                server.extract_script(pdf(), "protected.pdf")
+        self.assertFalse(locations[0].exists())
+
+    def test_pdf_unwraps_lines_and_keeps_paragraphs(self):
+        def convert(command, **kwargs):
+            Path(command[-1]).write_text("A presenta-\ntion script.\n\nThe next\nparagraph.\n")
+            return SimpleNamespace(returncode=0)
+
+        with patch("server.shutil.which", return_value="pdftotext"), patch("server.subprocess.run", side_effect=convert):
+            self.assertEqual(server.extract_script(pdf(), "script.pdf"), "A presentation script.\n\nThe next paragraph.")
 
 
 class ThemeTests(unittest.TestCase):
@@ -96,46 +135,110 @@ class ThemeTests(unittest.TestCase):
                 (theme / "colors.toml").write_text("unfinished = ")
                 self.assertFalse(server.read_theme()["connected"])
 
+    def test_legacy_terminal_palette_and_light_mode(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            theme = Path(temporary)
+            (theme / "alacritty.toml").write_text('[colors.primary]\nbackground = "#fafafa"\nforeground = "#222222"\n[colors.normal]\nblue = "#0055aa"')
+            with patch("server.theme_candidates", return_value=[theme]):
+                result = server.read_theme()
+                self.assertTrue(result["connected"])
+                self.assertEqual(result["accent"], "#0055aa")
+                self.assertEqual(result["mode"], "light")
+
+    def test_xdg_paths_and_explicit_override(self):
+        with patch.dict(os.environ, {"XDG_STATE_HOME": "/tmp/test-state", "XDG_CONFIG_HOME": "/tmp/test-config"}, clear=True):
+            self.assertEqual(server.theme_candidates(), [Path("/tmp/test-state/omarchy/current/theme"), Path("/tmp/test-config/omarchy/current/theme")])
+        with patch.dict(os.environ, {"OMARCHY_THEME_DIR": "/tmp/custom-theme"}):
+            self.assertEqual(server.theme_candidates(), [Path("/tmp/custom-theme")])
+
+    def test_replacing_theme_symlink_is_detected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name, color in [("night", "#111111"), ("day", "#ffffff")]:
+                directory = root / name
+                directory.mkdir()
+                (directory / "colors.toml").write_text(f'background = "{color}"\n')
+            current = root / "theme"
+            current.symlink_to(root / "night", target_is_directory=True)
+            with patch("server.theme_candidates", return_value=[current]):
+                self.assertEqual(server.read_theme()["background"], "#111111")
+                replacement = root / "next-theme"
+                replacement.symlink_to(root / "day", target_is_directory=True)
+                replacement.replace(current)
+                self.assertEqual(server.read_theme()["background"], "#ffffff")
+
+    def test_invalid_background_uses_fallback(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            (directory / "colors.toml").write_text('background = "url(https://example.com)"')
+            with patch("server.theme_candidates", return_value=[directory]):
+                self.assertFalse(server.read_theme()["connected"])
+
+
+class MemoryConnection:
+    """Exercise the real HTTP parser and responses without opening a socket."""
+    def __init__(self, data):
+        self.input = io.BytesIO(data)
+        self.output = io.BytesIO()
+
+    def makefile(self, mode, *args):
+        return self.input if "r" in mode else self.output
+
+    def sendall(self, data):
+        self.output.write(data)
+
 
 class HTTPTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.http = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
-        cls.thread = threading.Thread(target=cls.http.serve_forever, daemon=True)
-        cls.thread.start()
-        cls.base = f"http://127.0.0.1:{cls.http.server_port}"
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.http.shutdown()
-        cls.http.server_close()
-        cls.thread.join()
+    def request(self, path, body=None, headers=None):
+        payload = body or b""
+        fields = {"Host": "127.0.0.1:3400", **(headers or {})}
+        if body is not None:
+            fields["Content-Length"] = str(len(body))
+        lines = [f"{'POST' if body is not None else 'GET'} {path} HTTP/1.1"]
+        lines.extend(f"{key}: {value}" for key, value in fields.items())
+        connection = MemoryConnection(("\r\n".join(lines) + "\r\n\r\n").encode() + payload)
+        server.Handler(connection, ("127.0.0.1", 12345), SimpleNamespace(server_port=3400))
+        head, result = connection.output.getvalue().split(b"\r\n\r\n", 1)
+        return int(head.split(b" ")[1]), head, result
 
     def test_page_and_assets(self):
-        for path in ["/", "/app.js", "/styles.css", "/favicon.svg", "/api/theme"]:
-            with self.subTest(path=path), urlopen(self.base + path) as response:
-                self.assertEqual(response.status, 200)
-                self.assertIn("nosniff", response.headers["X-Content-Type-Options"])
-        with self.assertRaises(HTTPError) as result:
-            urlopen(self.base + "/../server.py")
-        self.assertEqual(result.exception.code, 404)
+        for path in ["/", "/app.js", "/playback.js", "/styles.css", "/favicon.svg", "/api/theme"]:
+            with self.subTest(path=path):
+                status, headers, body = self.request(path)
+                self.assertEqual(status, 200)
+                self.assertIn(b"nosniff", headers)
+                self.assertTrue(body)
+        self.assertEqual(self.request("/../server.py")[0], 404)
 
     def test_import_http(self):
-        request = Request(self.base + "/api/import?filename=opening.md", data=b"# Hello\n\nRead this.", method="POST")
-        with urlopen(request) as response:
-            self.assertEqual(json.load(response)["text"], "Hello\n\nRead this.")
+        status, _, body = self.request("/api/import?filename=opening.md", b"# Hello\n\nRead this.")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["text"], "Hello\n\nRead this.")
+
+    def test_unicode_filename_and_text(self):
+        status, _, body = self.request("/api/import?filename=caf%C3%A9.txt", "A café opening.".encode())
+        self.assertEqual(status, 200)
+        result = json.loads(body)
+        self.assertEqual(result["name"], "café.txt")
+        self.assertEqual(result["text"], "A café opening.")
+
+    def test_empty_import(self):
+        self.assertEqual(self.request("/api/import?filename=empty.txt", b"")[0], 413)
 
     def test_bad_import_http(self):
-        request = Request(self.base + "/api/import?filename=bad.docx", data=b"bad", method="POST")
-        with self.assertRaises(HTTPError) as result:
-            urlopen(request)
-        self.assertEqual(result.exception.code, 422)
+        status, _, body = self.request("/api/import?filename=bad.docx", b"bad")
+        self.assertEqual(status, 422)
+        self.assertIn("Word document", json.loads(body)["error"])
 
     def test_foreign_origin_and_host_rejected(self):
         for headers in [{"Origin": "https://foreign.example"}, {"Host": "foreign.example"}]:
-            with self.subTest(headers=headers), self.assertRaises(HTTPError) as result:
-                urlopen(Request(self.base + "/api/theme", headers=headers))
-            self.assertEqual(result.exception.code, 403)
+            with self.subTest(headers=headers):
+                self.assertEqual(self.request("/api/theme", headers=headers)[0], 403)
+
+    def test_oversized_import_is_rejected_before_reading_body(self):
+        connection = MemoryConnection(f"POST /api/import?filename=large.txt HTTP/1.1\r\nHost: localhost:3400\r\nContent-Length: {server.MAX_UPLOAD + 1}\r\n\r\n".encode())
+        server.Handler(connection, ("127.0.0.1", 12345), SimpleNamespace(server_port=3400))
+        self.assertIn(b"413", connection.output.getvalue().split(b"\r\n", 1)[0])
 
 
 if __name__ == "__main__":

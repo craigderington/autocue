@@ -42,7 +42,14 @@ def theme_candidates():
 def read_theme():
     for directory in theme_candidates():
         try:
-            colors = tomllib.loads((directory / "colors.toml").read_text())
+            if (directory / "colors.toml").is_file():
+                colors = tomllib.loads((directory / "colors.toml").read_text())
+            else:
+                terminal = tomllib.loads((directory / "alacritty.toml").read_text()).get("colors", {})
+                colors = {**terminal.get("primary", {}), "accent": terminal.get("normal", {}).get("blue", "")}
+            background = colors.get("background", colors.get("bg", ""))
+            if not isinstance(background, str) or not re.fullmatch(r"#[\da-fA-F]{6}", background):
+                continue
             palette = dict(FALLBACK)
             for key, aliases in {"background": ["background", "bg"],
                                  "foreground": ["foreground", "fg"],
@@ -52,16 +59,16 @@ def read_theme():
                     if isinstance(value, str) and re.fullmatch(r"#[\da-fA-F]{6}", value):
                         palette[key] = value
                         break
-            if not any(key in colors for key in ("background", "bg")):
-                continue
             name_path = directory.parent / "theme.name"
             name = name_path.read_text().strip() if name_path.is_file() else directory.resolve().name
             if name == "theme":
                 name = "Omarchy"
+            brightness = sum(int(background[i:i + 2], 16) * weight for i, weight in [(1, 0.299), (3, 0.587), (5, 0.114)])
+            inferred_mode = "light" if brightness > 155 or (directory / "light.mode").exists() else "dark"
             palette.update(name=name.replace("-", " ").title(), connected=True,
-                           mode=colors.get("mode", "light" if (directory / "light.mode").exists() else "dark"))
+                           mode=colors.get("mode", inferred_mode))
             return palette
-        except (OSError, ValueError):
+        except (OSError, ValueError, AttributeError, TypeError):
             continue
     return dict(FALLBACK)
 
@@ -178,6 +185,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, read_theme())
         assets = {"/": ("index.html", "text/html; charset=utf-8"),
                   "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+                  "/playback.js": ("playback.js", "text/javascript; charset=utf-8"),
                   "/styles.css": ("styles.css", "text/css; charset=utf-8"),
                   "/favicon.svg": ("favicon.svg", "image/svg+xml")}
         if path not in assets:
@@ -208,7 +216,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=3400)
     args = parser.parse_args()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    except OSError as error:
+        parser.error(f"Cannot start the local server: {error}. Check the port and local network permissions.")
     print(f"Omarchy Teleprompter · http://localhost:{server.server_port}", flush=True)
     try:
         server.serve_forever()

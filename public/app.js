@@ -1,3 +1,5 @@
+import { advancePosition, positionForScroll, scrollForPosition } from './playback.js';
+
 const $ = (id) => document.getElementById(id);
 const sample = `You have something worth saying.
 
@@ -19,7 +21,7 @@ let words = [];
 let rows = [];
 let position = 0;
 let speed = 140;
-let fontSize = 48;
+let fontSize = window.matchMedia('(max-width: 800px)').matches ? 32 : 48;
 let playing = false;
 let mirrored = false;
 let lastFrame = null;
@@ -76,24 +78,9 @@ function measure() {
   moveToPosition();
 }
 
-function rowAtPosition() {
-  let low = 0;
-  let high = rows.length - 2;
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2);
-    if (rows[middle].start <= position) low = middle;
-    else high = middle - 1;
-  }
-  return low;
-}
-
 function moveToPosition() {
   if (rows.length < 2) return;
-  const index = rowAtPosition();
-  const current = rows[index];
-  const next = rows[index + 1];
-  const fraction = Math.min(1, (position - current.start) / (next.start - current.start));
-  targetScroll = current.y + (next.y - current.y) * fraction;
+  targetScroll = scrollForPosition(rows, position);
   stage.scrollTop = targetScroll;
   targetScroll = stage.scrollTop;
   updateProgress();
@@ -123,7 +110,7 @@ function togglePlaying() {
 function tick(timestamp) {
   if (!playing) return;
   if (lastFrame !== null) {
-    position = Math.min(words.length, position + Math.min((timestamp - lastFrame) / 1000, 0.1) * speed / 60);
+    position = advancePosition(position, words.length, speed, Math.min((timestamp - lastFrame) / 1000, 0.1));
     moveToPosition();
   }
   lastFrame = timestamp;
@@ -201,9 +188,20 @@ document.addEventListener('fullscreenchange', () => {
 });
 
 let wakeLock;
+let wakeLockRequest;
 async function acquireWakeLock() {
-  try { if ('wakeLock' in navigator && !wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch { /* Optional enhancement. */ }
-  if (!playing) releaseWakeLock();
+  if (!('wakeLock' in navigator) || wakeLock || wakeLockRequest) return;
+  try {
+    wakeLockRequest = navigator.wakeLock.request('screen');
+    const acquired = await wakeLockRequest;
+    if (playing) {
+      wakeLock = acquired;
+      acquired.addEventListener('release', () => {
+        if (wakeLock === acquired) wakeLock = undefined;
+      }, { once: true });
+    } else await acquired.release();
+  } catch { /* Optional enhancement. */ }
+  finally { wakeLockRequest = undefined; }
 }
 function releaseWakeLock() { wakeLock?.release().catch(() => {}); wakeLock = undefined; }
 document.addEventListener('visibilitychange', () => { if (document.hidden && playing) setPlaying(false); });
@@ -236,6 +234,7 @@ async function importFile(file) {
   if (file.size > 10 * 1024 * 1024) return notify('Choose a file smaller than 10 MB.');
   imported = true;
   $('import').disabled = true;
+  $('edit').disabled = true;
   $('play').disabled = true;
   $('import').querySelector('span').textContent = 'Importing…';
   try {
@@ -245,10 +244,12 @@ async function importFile(file) {
     loadScript(result.text, file.name.replace(/\.[^.]+$/, ''));
     notify(`“${file.name}” is ready. Find your pace and press play.`);
   } catch (error) {
-    notify(error.message === 'Failed to fetch' ? 'The local server is unavailable. Start it again and retry.' : error.message);
+    // Fetch failures use different wording in Chromium, Firefox, and WebKit.
+    notify(error instanceof TypeError ? 'The local server is unavailable. Start it again and retry.' : error.message);
   } finally {
     imported = false;
     $('import').disabled = false;
+    $('edit').disabled = false;
     $('play').disabled = false;
     $('import').querySelector('span').textContent = 'Import script';
     $('file-input').value = '';
@@ -294,11 +295,7 @@ stage.addEventListener('touchstart', () => { if (playing) setPlaying(false); }, 
 stage.addEventListener('scroll', () => {
   if (Math.abs(stage.scrollTop - targetScroll) < 1 || rows.length < 2) return;
   if (playing) setPlaying(false);
-  let index = rows.findIndex((row, i) => i < rows.length - 1 && rows[i + 1].y >= stage.scrollTop);
-  if (index < 0) index = rows.length - 2;
-  const row = rows[index];
-  const next = rows[index + 1];
-  position = Math.min(words.length, Math.max(0, row.start + (next.start - row.start) * (stage.scrollTop - row.y) / (next.y - row.y)));
+  position = positionForScroll(rows, stage.scrollTop);
   targetScroll = stage.scrollTop;
   updateProgress();
   setPlaying(false);

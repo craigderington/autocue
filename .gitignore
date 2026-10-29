@@ -4,3 +4,7 @@ __pycache__/
 .env.*
 .aws/
 .DS_Store
+node_modules/
+playwright-report/
+test-results/
+.browser-test-state/
