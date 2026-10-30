@@ -1,4 +1,5 @@
 import { advancePosition, positionForScroll, scrollForPosition } from './playback.js';
+import { setupRecording } from './recording.js';
 
 const $ = (id) => document.getElementById(id);
 const sample = `You have something worth saying.
@@ -23,6 +24,7 @@ let position = 0;
 let speed = 140;
 let fontSize = window.matchMedia('(max-width: 800px)').matches ? 32 : 48;
 let playing = false;
+let recordingActive = false;
 let mirrored = false;
 let lastFrame = null;
 let animationFrame;
@@ -106,8 +108,8 @@ function setPlaying(value) {
   $('stage-hint').textContent = playing ? 'Find your rhythm. You’ve got this.' : position >= words.length ? 'A good take. Ready for another?' : position > 0 ? 'Your words will wait.' : 'Take a breath. Press play.';
   if (playing) {
     animationFrame = requestAnimationFrame(tick);
-    acquireWakeLock();
-  } else releaseWakeLock();
+  }
+  syncWakeLock();
 }
 
 function togglePlaying() {
@@ -193,17 +195,22 @@ document.addEventListener('fullscreenchange', () => {
   $('fullscreen').setAttribute('aria-label', full ? 'Leave fullscreen' : 'Enter fullscreen');
   $('fullscreen').title = full ? 'Leave fullscreen (F)' : 'Fullscreen (F)';
   if (!full) document.body.append($('toast'));
+  (full ? prompter : $('recording-home')).append($('recording-panel'));
   measure();
 });
 
 let wakeLock;
 let wakeLockRequest;
+function syncWakeLock() {
+  if (playing || recordingActive) acquireWakeLock();
+  else releaseWakeLock();
+}
 async function acquireWakeLock() {
   if (!('wakeLock' in navigator) || wakeLock || wakeLockRequest) return;
   try {
     wakeLockRequest = navigator.wakeLock.request('screen');
     const acquired = await wakeLockRequest;
-    if (playing) {
+    if (playing || recordingActive) {
       wakeLock = acquired;
       acquired.addEventListener('release', () => {
         if (wakeLock === acquired) wakeLock = undefined;
@@ -213,7 +220,10 @@ async function acquireWakeLock() {
   finally { wakeLockRequest = undefined; }
 }
 function releaseWakeLock() { wakeLock?.release().catch(() => {}); wakeLock = undefined; }
-document.addEventListener('visibilitychange', () => { if (document.hidden && playing) setPlaying(false); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && playing) setPlaying(false);
+  else if (!document.hidden) syncWakeLock();
+});
 
 async function refreshTheme() {
   try {
@@ -339,3 +349,8 @@ changeSize(0);
 new ResizeObserver(() => measure()).observe(stage);
 refreshTheme();
 setInterval(refreshTheme, 1500);
+setupRecording({
+  notify,
+  getTitle: () => $('script-title').textContent,
+  onActivityChange(active) { recordingActive = active; syncWakeLock(); },
+});

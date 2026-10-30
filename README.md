@@ -34,6 +34,18 @@ Markdown’s common formatting markers are removed for reading. Word import read
 
 Scripts stay on your machine. The server binds to `127.0.0.1`, processes imports locally, and deletes PDF temporary files after extraction. Scripts are kept only in the current page and are lost on reload. Only speed, text size, and mirror preferences are saved in browser local storage. There are no analytics, external fonts, or CDN dependencies.
 
+## Record a take
+
+1. Select **Enable camera** and allow camera and microphone access in the browser. The live thumbnail lets you frame your shot without starting a recording.
+2. Select **Record take**, then start or pause script scrolling whenever you need. Recording runs independently of playback, including in fullscreen.
+3. Select **Stop recording**. Both devices turn off once the video finishes encoding. Select **Review take** to watch it, then **Download** to save it locally.
+
+The download uses a format supported by your browser (`.webm` or `.mp4`) and includes camera video and microphone audio. It does not include the script or application UI. The live camera thumbnail is mirrored for framing; script mirroring and the thumbnail do not mirror the saved video.
+
+Footage stays in browser memory and is never sent to the local server or an external service. Download it before leaving or reloading the page. Only the most recent completed take is retained; it stays available until the next take finishes. Takes stop automatically at **15 minutes or 256 MiB**, whichever comes first. If a device disconnects, available footage is finalized for download.
+
+Camera capture requires `localhost` or HTTPS. Permission errors appear beside the controls; if access was denied, enable both devices in the browser's site settings and retry. Keep the tab open and in the foreground while recording; browser or operating-system background restrictions can interrupt capture.
+
 ## Omarchy themes
 
 The app checks the following paths every 1.5 seconds, so theme changes apply during playback:
@@ -51,11 +63,11 @@ OMARCHY_THEME_DIR=/path/to/theme python3 server.py
 
 ## Development
 
-- `public/` — browser UI, styles, and playback logic; no build step.
+- `public/` — browser UI, styles, playback, and camera recording; no build step.
 - `server.py` — local HTTP server, document extraction, and theme reader.
 - `tests/` — standard-library unit and HTTP integration tests.
 - `e2e/` — Playwright browser tests using an isolated local server and theme fixtures.
-- `make test` — run extraction, theme, HTTP handler, and playback tests (requires Node.js 22+; HTTP tests use in-memory connections).
+- `make test` — run extraction, theme, HTTP handler, playback, and recording tests (requires Node.js 22+; HTTP tests use in-memory connections).
 - `make check` — check Python and JavaScript syntax (requires Node.js for JS).
 - `make test-browser` — run the browser matrix after the development setup below.
 
@@ -75,6 +87,10 @@ The suite starts its own server on **127.0.0.1:3417**. Keep that port available.
 
 The matrix covers Chromium, Firefox, WebKit, and emulated Pixel 7 and iPhone 13 profiles. It checks imports through the real server, playback timing, pause/resume, keyboard controls, seeking, resizing, mirroring, editing, safe text rendering, saved preferences, theme switching, connection recovery, dialogs, and fullscreen. Device fullscreen checks are explicitly skipped when the browser does not support it. Mobile emulation and WebKit coverage do not replace testing on physical devices or released Safari.
 
+Recording tests use synthetic video/audio streams with each engine's real encoder, then download and decode the result. Chromium and Firefox also exercise native `getUserMedia` with their synthetic-device settings. Permission denial, cancelled requests, disconnects, cleanup, take replacement, and fullscreen recording are covered. Automated tests never open your real camera or microphone; actual device framing and microphone quality still need a physical-device check.
+
+The pinned Linux WebKit build does not expose `MediaRecorder`, so its encoding tests explicitly skip and its unavailable-feature UI is verified instead. These skips are reported separately from passing checks. Native Safari/iOS recording remains a manual verification item; format selection includes MP4 for browsers that support it.
+
 ```sh
 npm run test:browser:list                 # Validate configuration and list cases; does not run browsers
 npm run test:browser -- --project=firefox # Run one engine
@@ -89,6 +105,8 @@ On Omarchy, Playwright's Ubuntu WebKit build can require library versions that d
 
 ```sh
 make test-browser-docker
+# One engine or spec:
+make test-browser-docker BROWSER_TEST_ARGS="e2e/recording.spec.js --project=webkit"
 ```
 
 This requires Docker and downloads the matching Playwright image on the first build. It includes Python, Poppler, and the pinned Node development dependencies. The tests run as non-root UID 1000; the host report directories must be writable by that UID. Reports and screenshots are saved to `playwright-report/` and `test-results/`. The test server stays inside the container with no published ports. Keep the Dockerfile's Playwright version in sync with `package-lock.json` when upgrading.

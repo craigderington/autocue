@@ -202,7 +202,7 @@ class HTTPTests(unittest.TestCase):
         return int(head.split(b" ")[1]), head, result
 
     def test_page_and_assets(self):
-        for path in ["/", "/app.js", "/playback.js", "/styles.css", "/favicon.svg", "/api/theme"]:
+        for path in ["/", "/app.js", "/playback.js", "/recording.js", "/styles.css", "/favicon.svg", "/api/theme"]:
             with self.subTest(path=path):
                 status, headers, body = self.request(path)
                 self.assertEqual(status, 200)

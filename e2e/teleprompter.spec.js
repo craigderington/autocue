@@ -35,9 +35,11 @@ test.beforeEach(async ({ page }) => {
 test('loads all local assets without runtime errors or external requests', async ({ page }) => {
   const errors = [];
   const external = [];
+  const localOrigin = new URL(page.url()).origin;
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('request', (request) => {
-    if (!request.url().startsWith('http://127.0.0.1:3417/')) external.push(request.url());
+    // Native media controls can load same-origin blob resources in WebKit.
+    if (new URL(request.url()).origin !== localOrigin) external.push(request.url());
   });
   await page.reload();
   await expect(page.getByRole('heading', { name: 'The opening take' })).toBeVisible();
