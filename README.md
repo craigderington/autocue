@@ -2,7 +2,7 @@
 
 A simple local teleprompter for reading scripts at your own pace. Import a file, adjust the reading speed, and press **Space**. The interface follows your active Omarchy theme automatically.
 
-![autocue showing the sample script, reading controls, and optional camera recording in an Omarchy theme](docs/autocue.png)
+![autocue showing the sample script, reading controls, and optional camera recording in the default Tokyo Night theme](docs/autocue.png)
 
 ## Run
 
