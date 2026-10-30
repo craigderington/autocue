@@ -1,0 +1,19 @@
+# Match the pinned @playwright/test version in package-lock.json.
+FROM mcr.microsoft.com/playwright:v1.62.1-noble
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 poppler-utils make \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY server.py Makefile playwright.config.js ./
+COPY public/ ./public/
+COPY tests/ ./tests/
+COPY e2e/ ./e2e/
+RUN chown -R 1000:1000 /app
+USER 1000:1000
+
+CMD ["npm", "run", "test:browser"]

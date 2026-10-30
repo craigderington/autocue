@@ -2,9 +2,18 @@
 
 A simple local teleprompter for reading scripts at your own pace. Import a file, adjust the reading speed, and press **Space**. The interface follows your active Omarchy theme automatically.
 
+![autocue showing the sample script, reading controls, and optional camera recording in an Omarchy theme](docs/autocue.png)
+
 ## Run
 
 Requires **Python 3.11+**. For PDF import, install Poppler (`sudo pacman -S poppler` on Omarchy). Running the app needs no Python or JavaScript packages.
+
+Download and extract **Source code (zip)** from the [latest release](https://github.com/craigderington/autocue/releases/latest), then open a terminal in the extracted directory. You can also clone the repository:
+
+```sh
+git clone https://github.com/craigderington/autocue.git
+cd autocue
+```
 
 ```sh
 make run
@@ -13,10 +22,16 @@ make run
 
 Open **<http://localhost:3400>**. Keep the terminal running; press Ctrl+C to stop. To choose a different port: `python3 server.py --port 3500`.
 
+### Runtime and containers
+
+autocue runs directly on your desktop with Python. There is no application container or Compose stack. This lets it read your active Omarchy theme without mounting desktop configuration into a container. Docker is optional and used only for isolated browser tests; Node.js and npm are also development-only dependencies.
+
+The app also runs without Omarchy and uses its built-in fallback palette. The server accepts local `localhost` and `127.0.0.1` requests only; this release is intended for local use.
+
 ## Read a script
 
 - **Import script** or drag a file onto the window: Word `.docx`, text-based `.pdf`, UTF-8/UTF-16 `.txt`, `.md`, or `.markdown`. Maximum file size: 10 MB; extracted text: 200,000 characters.
-- **Edit script** to paste text or adjust the imported wording. Importing or applying edits starts a fresh take.
+- **Edit script** to paste text or adjust the imported wording. Importing or applying edits resets the reading position; an active camera recording continues independently.
 - Set **40–300 words per minute**, adjust text size, or enable horizontal mirroring for a teleprompter reflector.
 - Use the timeline or scroll the reading area to reposition. Manual scrolling pauses playback. Playback also pauses when the browser tab is hidden.
 - **Fullscreen** keeps the script and cue visible. Keyboard controls work there too.
@@ -111,4 +126,10 @@ make test-browser-docker BROWSER_TEST_ARGS="e2e/recording.spec.js --project=webk
 
 This requires Docker and downloads the matching Playwright image on the first build. It includes Python, Poppler, and the pinned Node development dependencies. The tests run as non-root UID 1000; the host report directories must be writable by that UID. Reports and screenshots are saved to `playwright-report/` and `test-results/`. The test server stays inside the container with no published ports. Keep the Dockerfile's Playwright version in sync with `package-lock.json` when upgrading.
 
-Browser execution requires loopback sockets and browser subprocesses. In a sandbox that blocks them, `make check`, `make test`, and test discovery remain available, but discovery alone does not verify browser behavior.
+Browser execution requires loopback sockets and browser subprocesses. JavaScript unit tests also require child processes. Syntax checks, Python tests, and browser-test discovery can run in more restricted environments; discovery alone does not verify browser behavior.
+
+## Releases and license
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes and known limitations. Before tagging a release, run `make check test`, confirm the GitHub **Verify** workflow passes for that commit, and update the changelog. Publish the matching version tag (for example, `v0.1.0`) with those notes; GitHub provides source ZIP and tar archives automatically.
+
+autocue is available under the [MIT license](LICENSE).

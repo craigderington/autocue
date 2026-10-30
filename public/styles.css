@@ -5,7 +5,7 @@
   --surface:color-mix(in srgb,var(--background),var(--foreground) 3%);
   --stage:color-mix(in srgb,var(--background),#000 16%);
   --muted:color-mix(in srgb,var(--foreground),var(--background) 32%);
-  --subtle:color-mix(in srgb,var(--foreground),var(--background) 50%);
+  --subtle:color-mix(in srgb,var(--foreground),var(--background) 40%);
   --border:color-mix(in srgb,var(--foreground),var(--background) 86%);
   --cue-offset:130px;
   --font-size:48px;

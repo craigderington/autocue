@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Local teleprompter, using only Python's standard library and Poppler."""
+"""autocue: a local teleprompter using Python's standard library and Poppler."""
 from __future__ import annotations
 
 import argparse
@@ -124,7 +124,7 @@ def extract_script(data, filename):
         if not shutil.which("pdftotext"):
             raise ImportErrorMessage("PDF import needs Poppler. Install it with: sudo pacman -S poppler")
         try:
-            with tempfile.TemporaryDirectory(prefix="omarchy-prompter-") as temp:
+            with tempfile.TemporaryDirectory(prefix="autocue-") as temp:
                 source = Path(temp) / "script.pdf"
                 output = Path(temp) / "script.txt"
                 source.write_bytes(data)
@@ -221,7 +221,7 @@ def main():
         server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
     except OSError as error:
         parser.error(f"Cannot start the local server: {error}. Check the port and local network permissions.")
-    print(f"Omarchy Teleprompter · http://localhost:{server.server_port}", flush=True)
+    print(f"autocue · http://localhost:{server.server_port}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
