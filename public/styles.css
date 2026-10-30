@@ -314,6 +314,7 @@ h1 {
   height:100%;
   overflow-y:auto;
   overscroll-behavior:contain;
+  overflow-anchor:none;
   scrollbar-width:thin;
   scrollbar-color:var(--border) transparent;
   mask-image:linear-gradient(transparent 5%,#000 20%,#000 72%,transparent 96%);

@@ -91,6 +91,6 @@ On Omarchy, Playwright's Ubuntu WebKit build can require library versions that d
 make test-browser-docker
 ```
 
-This requires Docker and downloads the matching Playwright image on the first build. It includes Python, Poppler, and the pinned Node development dependencies. The tests run as the container's non-root `pwuser` (UID 1000); the host report directories must be writable by that UID. Reports and screenshots are saved to `playwright-report/` and `test-results/`. The test server stays inside the container with no published ports. Keep the Dockerfile's Playwright version in sync with `package-lock.json` when upgrading.
+This requires Docker and downloads the matching Playwright image on the first build. It includes Python, Poppler, and the pinned Node development dependencies. The tests run as non-root UID 1000; the host report directories must be writable by that UID. Reports and screenshots are saved to `playwright-report/` and `test-results/`. The test server stays inside the container with no published ports. Keep the Dockerfile's Playwright version in sync with `package-lock.json` when upgrading.
 
 Browser execution requires loopback sockets and browser subprocesses. In a sandbox that blocks them, `make check`, `make test`, and test discovery remain available, but discovery alone does not verify browser behavior.

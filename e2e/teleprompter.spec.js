@@ -110,9 +110,11 @@ test('text size and viewport changes preserve reading position', async ({ page }
   await page.getByRole('button', { name: 'Increase text size' }).click();
   expect(await page.locator('#script').evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBe(before + 4);
   await expect(page.locator('#progress')).toHaveValue(position);
-  await page.setViewportSize({ width: 600, height: 900 });
-  await page.clock.runFor(100);
-  await expect(page.locator('#progress')).toHaveValue(position);
+  for (const width of [600, 360, 800, 393, 600]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.clock.runFor(100);
+    await expect(page.locator('#progress')).toHaveValue(position);
+  }
 });
 
 test('manual scrolling pauses playback', async ({ page }) => {

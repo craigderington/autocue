@@ -27,6 +27,8 @@ let mirrored = false;
 let lastFrame = null;
 let animationFrame;
 let targetScroll = 0;
+let measuredWidth = 0;
+let measuredHeight = 0;
 let toastTimer;
 let themeSignature = '';
 let imported = false;
@@ -57,6 +59,8 @@ function updateProgress() {
 }
 
 function measure() {
+  measuredWidth = stage.clientWidth;
+  measuredHeight = stage.clientHeight;
   const cue = Math.round(stage.clientHeight * 0.26);
   prompter.style.setProperty('--cue-offset', `${cue}px`);
   prompter.style.setProperty('--bottom-padding', `${stage.clientHeight - cue}px`);
@@ -79,11 +83,16 @@ function measure() {
 }
 
 function moveToPosition() {
+  if (layoutChanged()) { measure(); return; }
   if (rows.length < 2) return;
   targetScroll = scrollForPosition(rows, position);
   stage.scrollTop = targetScroll;
   targetScroll = stage.scrollTop;
   updateProgress();
+}
+
+function layoutChanged() {
+  return stage.clientWidth !== measuredWidth || stage.clientHeight !== measuredHeight;
 }
 
 function setPlaying(value) {
@@ -293,6 +302,9 @@ for (const dialog of document.querySelectorAll('dialog')) dialog.addEventListene
 stage.addEventListener('wheel', () => { if (playing) setPlaying(false); }, { passive: true });
 stage.addEventListener('touchstart', () => { if (playing) setPlaying(false); }, { passive: true });
 stage.addEventListener('scroll', () => {
+  // A viewport reflow can dispatch scroll before ResizeObserver runs. Keep the
+  // word position and rebuild the line map instead of treating it as a seek.
+  if (layoutChanged()) { measure(); return; }
   if (Math.abs(stage.scrollTop - targetScroll) < 1 || rows.length < 2) return;
   if (playing) setPlaying(false);
   position = positionForScroll(rows, stage.scrollTop);
